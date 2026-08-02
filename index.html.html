@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sowbarnika_ue // portfolio.sh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Bebas+Neue&family=Oxanium:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060a08;
+    --bg-panel:#0c1310;
+    --bg-panel-alt:#091009;
+    --bg-raised:#101a15;
+    --border:#1c2e26;
+    --border-bright:#2a463a;
+    --green:#3dff8b;
+    --green-dim:#1f8f52;
+    --green-glow: rgba(61,255,139,0.35);
+    --cyan:#54e9ff;
+    --cyan-dim:#1f8fa0;
+    --amber:#ffb454;
+    --amber-dim:#b3792f;
+    --text:#d3ecdd;
+    --text-dim:#6f8a7c;
+    --text-faint:#3f5449;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Bebas Neue', sans-serif;
+    --ui: 'Oxanium', sans-serif;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.6;
+    min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
+  }
+
+  /* ---------- ambient CRT / scanline layer ---------- */
+  .crt-overlay{
+    position:fixed; inset:0; pointer-events:none; z-index:200;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(0,0,0,0) 0px,
+        rgba(0,0,0,0) 2px,
+        rgba(0,0,0,0.16) 3px
+      );
+    mix-blend-mode:multiply;
+    opacity:.5;
+  }
+  .glow-vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:199;
+    background: radial-gradient(ellipse at 50% 0%, rgba(61,255,139,0.05), transparent 55%),
+                radial-gradient(ellipse at 100% 100%, rgba(84,233,255,0.05), transparent 50%);
+  }
+
+  ::selection{ background:var(--green); color:#03130a; }
+
+  a{ color:var(--cyan); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+  a:focus-visible, button:focus-visible, .nav-item:focus-visible{
+    outline:2px solid var(--green);
+    outline-offset:3px;
+  }
+
+  /* ---------- boot overlay ---------- */
+  #boot{
+    position:fixed; inset:0; background:#020403; color:var(--green);
+    z-index:500; font-family:var(--mono); font-size:13px;
+    padding:40px; display:flex; flex-direction:column; gap:4px;
+    animation: boot-hide 0.4s ease forwards;
+    animation-delay: 2.4s;
+  }
+  #boot .line{ opacity:0; white-space:pre; animation: line-in 0.15s ease forwards; }
+  #boot .line:nth-child(1){ animation-delay:.05s; }
+  #boot .line:nth-child(2){ animation-delay:.35s; }
+  #boot .line:nth-child(3){ animation-delay:.6s; }
+  #boot .line:nth-child(4){ animation-delay:.95s; }
+  #boot .line:nth-child(5){ animation-delay:1.2s; color:var(--cyan);}
+  #boot .line:nth-child(6){ animation-delay:1.55s; }
+  #boot .line:nth-child(7){ animation-delay:1.85s; color:var(--amber);}
+  @keyframes line-in{ to{ opacity:1; } }
+  @keyframes boot-hide{ to{ opacity:0; visibility:hidden; } }
+
+  @media (prefers-reduced-motion: reduce){
+    #boot{ display:none; }
+    *{ animation-duration:0.01ms !important; animation-delay:0s !important; }
+  }
+
+  /* ---------- layout shell ---------- */
+  .app{
+    display:grid;
+    grid-template-columns: 240px 1fr;
+    min-height:100vh;
+  }
+
+  /* ---------- sidebar / file tree ---------- */
+  .sidebar{
+    border-right:1px solid var(--border);
+    background:var(--bg-panel-alt);
+    padding:22px 0;
+    position:sticky; top:0; height:100vh;
+    display:flex; flex-direction:column;
+  }
+  .brand{
+    padding:0 20px 18px 20px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:14px;
+  }
+  .brand .tag{
+    font-family:var(--ui); font-size:10px; letter-spacing:.18em;
+    color:var(--text-faint); text-transform:uppercase;
+  }
+  .brand .id{
+    font-family:var(--display); font-size:28px; letter-spacing:.03em;
+    color:var(--green); line-height:1;
+    text-shadow:0 0 18px var(--green-glow);
+    margin-top:4px;
+  }
+  .tree{ padding:0 10px; display:flex; flex-direction:column; gap:2px; }
+  .tree-label{
+    font-family:var(--ui); font-size:10px; color:var(--text-faint);
+    letter-spacing:.15em; padding:10px 10px 6px; text-transform:uppercase;
+  }
+  .nav-item{
+    display:flex; align-items:center; gap:8px;
+    padding:7px 10px; border-radius:3px;
+    color:var(--text-dim); font-size:12.5px; cursor:pointer;
+    border-left:2px solid transparent;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .nav-item .glyph{ color:var(--text-faint); font-size:12px; width:14px; }
+  .nav-item:hover{ background:var(--bg-raised); color:var(--text); }
+  .nav-item.active{
+    color:var(--green); border-left-color:var(--green);
+    background:linear-gradient(90deg, rgba(61,255,139,0.08), transparent);
+  }
+  .nav-item.active .glyph{ color:var(--green); }
+
+  .sidebar-foot{
+    margin-top:auto; padding:14px 20px 4px; border-top:1px solid var(--border);
+    font-size:10.5px; color:var(--text-faint); font-family:var(--ui);
+  }
+  .status-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-right:6px; box-shadow:0 0 6px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  /* mobile top nav */
+  .mobile-nav{ display:none; }
+
+  /* ---------- main column ---------- */
+  main{ min-width:0; }
+
+  .titlebar{
+    position:sticky; top:0; z-index:10;
+    background:rgba(9,16,9,0.88);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);
+    padding:10px 28px;
+    display:flex; align-items:center; gap:10px;
+    font-size:11.5px; color:var(--text-dim);
+  }
+  .dots{ display:flex; gap:6px; margin-right:6px; }
+  .dot{ width:9px; height:9px; border-radius:50%; }
+  .dot.a{ background:var(--amber); }
+  .dot.c{ background:var(--cyan); }
+  .dot.g{ background:var(--green); }
+  .path{ font-family:var(--mono); }
+  .path .sep{ color:var(--text-faint); }
+  .path .cur{ color:var(--green); }
+
+  section{ padding:70px 44px; border-bottom:1px solid var(--border); scroll-margin-top:52px; }
+  section:last-of-type{ border-bottom:none; }
+  .prompt{
+    font-size:12px; color:var(--green-dim); margin-bottom:14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .prompt .user{ color:var(--green); }
+  .prompt .host{ color:var(--text-dim); }
+  .prompt .cmd{ color:var(--text); }
+  .cursor-blink{
+    display:inline-block; width:7px; height:14px; background:var(--green);
+    animation: blink 1s step-end infinite; vertical-align:-2px;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  h2.sec-title{
+    font-family:var(--display); font-size:40px; letter-spacing:.03em;
+    color:var(--text); margin-bottom:6px; line-height:1;
+  }
+  h2.sec-title .accent{ color:var(--green); }
+  .sec-sub{
+    font-family:var(--ui); font-size:11px; color:var(--text-faint);
+    letter-spacing:.14em; text-transform:uppercase; margin-bottom:34px;
+  }
+
+  /* ---------- hero ---------- */
+  #profile{ padding-top:56px; }
+  .hero-box{
+    border:1px solid var(--border-bright);
+    background:linear-gradient(180deg, rgba(61,255,139,0.03), transparent 40%), var(--bg-panel);
+    padding:36px 36px 30px;
+    position:relative;
+  }
+  .hero-box::before, .hero-box::after{
+    content:''; position:absolute; width:16px; height:16px;
+    border-color:var(--green); border-style:solid; opacity:.7;
+  }
+  .hero-box::before{ top:-1px; left:-1px; border-width:2px 0 0 2px; }
+  .hero-box::after{ bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+  .eyebrow{ font-family:var(--ui); font-size:11px; color:var(--cyan); letter-spacing:.2em; text-transform:uppercase; margin-bottom:10px; }
+  h1{
+    font-family:var(--display); font-size:clamp(46px,7vw,84px);
+    letter-spacing:.02em; line-height:.94; color:var(--text);
+    text-shadow:0 0 30px rgba(61,255,139,0.12);
+  }
+  h1 span{ color:var(--green); }
+  .role-line{
+    font-family:var(--ui); font-weight:600; font-size:15px; color:var(--amber);
+    letter-spacing:.05em; margin-top:12px;
+  }
+  .profile-text{
+    margin-top:22px; max-width:640px; color:var(--text-dim); font-size:13.5px; line-height:1.85;
+    border-left:2px solid var(--border-bright); padding-left:16px;
+  }
+  .contact-row{
+    display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:26px;
+    font-size:12.5px;
+  }
+  .contact-row a, .contact-row span{ color:var(--text-dim); }
+  .contact-row .k{ color:var(--green-dim); }
+  .contact-row a:hover{ color:var(--cyan); }
+
+  /* ---------- skills ---------- */
+  .skill-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  .skill-panel{
+    border:1px solid var(--border); background:var(--bg-panel);
+    padding:20px 20px 22px;
+  }
+  .skill-panel .head{
+    display:flex; align-items:center; justify-content:space-between;
+    font-family:var(--ui); font-size:11px; letter-spacing:.12em;
+    color:var(--text-dim); text-transform:uppercase; margin-bottom:16px;
+    padding-bottom:10px; border-bottom:1px dashed var(--border-bright);
+  }
+  .pill-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .pill{
+    font-family:var(--mono); font-size:11.5px; padding:5px 10px;
+    border:1px solid var(--border-bright); color:var(--text);
+    background:var(--bg-raised); white-space:nowrap;
+  }
+  .skill-panel.green .pill{ color:var(--green); border-color:var(--green-dim); }
+  .skill-panel.cyan .pill{ color:var(--cyan); border-color:var(--cyan-dim); }
+  .skill-panel.amber .pill{ color:var(--amber); border-color:var(--amber-dim); }
+
+  /* ---------- experience ---------- */
+  .job-card{
+    border:1px solid var(--border); background:var(--bg-panel);
+    padding:26px 28px; position:relative;
+  }
+  .job-head{
+    display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px;
+    border-bottom:1px solid var(--border-bright); padding-bottom:14px; margin-bottom:18px;
+  }
+  .job-title{ font-family:var(--display); font-size:26px; color:var(--text); letter-spacing:.02em; }
+  .job-title .co{ color:var(--green); }
+  .job-meta{ font-family:var(--ui); font-size:11px; color:var(--text-faint); letter-spacing:.08em; }
+  .job-meta .date{ color:var(--amber); }
+
+  .log-group{ margin-bottom:18px; }
+  .log-group:last-child{ margin-bottom:0; }
+  .log-tag{
+    display:inline-block; font-family:var(--ui); font-size:10px; letter-spacing:.12em;
+    padding:3px 8px; margin-bottom:10px; text-transform:uppercase;
+    border:1px solid; 
+  }
+  .log-tag.maker{ color:var(--green); border-color:var(--green-dim); }
+  .log-tag.qc{ color:var(--cyan); border-color:var(--cyan-dim); }
+  .log-tag.ai{ color:var(--amber); border-color:var(--amber-dim); }
+  .log-list{ list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .log-list li{
+    font-size:13px; color:var(--text-dim); padding-left:18px; position:relative;
+  }
+  .log-list li::before{
+    content:'>'; position:absolute; left:0; color:var(--text-faint);
+  }
+
+  /* ---------- education / project split ---------- */
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  .card{ border:1px solid var(--border); background:var(--bg-panel); padding:24px 26px; }
+  .card .card-title{ font-family:var(--display); font-size:24px; color:var(--text); letter-spacing:.02em; margin-bottom:4px; }
+  .card .card-sub{ font-size:12px; color:var(--text-dim); margin-bottom:14px; }
+  .kv{ display:flex; justify-content:space-between; font-size:12px; padding:6px 0; border-top:1px dashed var(--border-bright); }
+  .kv:first-of-type{ border-top:none; }
+  .kv .k{ color:var(--text-faint); }
+  .kv .v{ color:var(--green); }
+  .tech-tags{ display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 14px; }
+  .tech-tags span{ font-size:10.5px; padding:3px 8px; border:1px solid var(--cyan-dim); color:var(--cyan); }
+
+  /* ---------- certs / languages ---------- */
+  .row-2{ display:grid; grid-template-columns:1.4fr 1fr; gap:20px; }
+  .cert-item{ display:flex; gap:14px; padding:14px 0; border-top:1px dashed var(--border-bright); }
+  .cert-item:first-child{ border-top:none; }
+  .cert-item .mark{ color:var(--amber); font-size:16px; line-height:1; }
+  .cert-item .t{ font-size:13px; color:var(--text); }
+  .cert-item .d{ font-size:11px; color:var(--text-faint); margin-top:2px; }
+  .lang-list{ display:flex; flex-direction:column; gap:10px; }
+  .lang-row{ display:flex; align-items:center; justify-content:space-between; font-size:13px; }
+  .lang-row .bar{ flex:1; height:4px; margin:0 12px; background:var(--border-bright); position:relative; overflow:hidden; }
+  .lang-row .bar::after{ content:''; position:absolute; inset:0; background:var(--green); width:var(--w,60%); box-shadow:0 0 8px var(--green-glow); }
+
+  /* ---------- footer / contact terminal ---------- */
+  footer{ padding:60px 44px 40px; }
+  .term-window{
+    border:1px solid var(--border-bright); background:#040705; max-width:640px; margin:0 auto;
+  }
+  .term-window .bar{ display:flex; gap:6px; padding:9px 12px; border-bottom:1px solid var(--border); }
+  .term-window .body{ padding:20px 22px; font-size:12.5px; }
+  .term-window .body .l{ margin-bottom:8px; color:var(--text-dim); }
+  .term-window .body .l .k{ color:var(--green); }
+  .term-window .body .l a{ color:var(--cyan); }
+  .foot-note{ text-align:center; margin-top:26px; font-size:10.5px; color:var(--text-faint); font-family:var(--ui); letter-spacing:.1em; }
+
+  /* ---------- statusbar ---------- */
+  .statusbar{
+    position:sticky; bottom:0; z-index:10;
+    display:flex; align-items:center; gap:22px;
+    background:var(--bg-panel-alt); border-top:1px solid var(--border);
+    padding:8px 28px; font-size:10.5px; color:var(--text-faint); font-family:var(--ui);
+  }
+  .statusbar b{ color:var(--green); font-weight:600; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:960px){
+    .skill-grid{ grid-template-columns:1fr; }
+    .split, .row-2{ grid-template-columns:1fr; }
+  }
+  @media (max-width:800px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ display:none; }
+    .mobile-nav{
+      display:flex; gap:4px; overflow-x:auto; position:sticky; top:0; z-index:11;
+      background:var(--bg-panel-alt); border-bottom:1px solid var(--border);
+      padding:10px 14px;
+    }
+    .mobile-nav a{
+      font-family:var(--ui); font-size:10.5px; letter-spacing:.08em; white-space:nowrap;
+      color:var(--text-dim); border:1px solid var(--border-bright); padding:6px 10px; text-decoration:none;
+      text-transform:uppercase;
+    }
+    .mobile-nav a.active{ color:var(--green); border-color:var(--green-dim); }
+    section{ padding:46px 20px; }
+    .titlebar{ padding:10px 16px; }
+    footer{ padding:40px 18px; }
+    .statusbar{ flex-wrap:wrap; gap:8px 16px; padding:8px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="crt-overlay" aria-hidden="true"></div>
+<div class="glow-vignette" aria-hidden="true"></div>
+
+<div id="boot" aria-hidden="true">
+  <div class="line">root@portfolio:~$ ./init_session --user sowbarnika_ue</div>
+  <div class="line">[ OK ] mounting profile.sh ...</div>
+  <div class="line">[ OK ] loading skills.json ...</div>
+  <div class="line">[ OK ] indexing experience.log (eClerx) ...</div>
+  <div class="line">[....] verifying credentials ...</div>
+  <div class="line">[ OK ] credentials verified</div>
+  <div class="line">ACCESS GRANTED — welcome.</div>
+</div>
+
+<nav class="mobile-nav" aria-label="Section navigation">
+  <a href="#profile" class="active">profile.sh</a>
+  <a href="#skills">skills.json</a>
+  <a href="#experience">experience.log</a>
+  <a href="#education">education.db</a>
+  <a href="#project">project/</a>
+  <a href="#certs">certs.log</a>
+  <a href="#contact">contact.sh</a>
+</nav>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="tag">// personnel file</div>
+      <div class="id">SOWBARNIKA<br>UE</div>
+    </div>
+    <div class="tree">
+      <div class="tree-label">~/portfolio</div>
+      <a href="#profile" class="nav-item active" data-nav><span class="glyph">◆</span>profile.sh</a>
+      <a href="#skills" class="nav-item" data-nav><span class="glyph">◆</span>skills.json</a>
+      <a href="#experience" class="nav-item" data-nav><span class="glyph">◆</span>experience.log</a>
+      <a href="#education" class="nav-item" data-nav><span class="glyph">◆</span>education.db</a>
+      <a href="#project" class="nav-item" data-nav><span class="glyph">◆</span>project/</a>
+      <a href="#certs" class="nav-item" data-nav><span class="glyph">◆</span>certs.log</a>
+      <a href="#contact" class="nav-item" data-nav><span class="glyph">◆</span>contact.sh</a>
+    </div>
+    <div class="sidebar-foot">
+      <div><span class="status-dot"></span>STATUS: OPEN TO WORK</div>
+      <div style="margin-top:6px;">LOCATION: Udumalpet, Tamil Nadu, IN</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="titlebar">
+      <div class="dots"><span class="dot a"></span><span class="dot c"></span><span class="dot g"></span></div>
+      <div class="path" id="pathbar">~ <span class="sep">/</span> <span class="cur">profile.sh</span></div>
+    </div>
+
+    <!-- PROFILE -->
+    <section id="profile">
+      <div class="hero-box">
+        <div class="eyebrow">// analyst — data validation &amp; AI-assisted workflows</div>
+        <h1>SOWBARNIKA <span>UE</span></h1>
+        <div class="role-line">ANALYST @ ECLERX SERVICES LTD — TIDEL PARK, COIMBATORE</div>
+        <p class="profile-text">
+          Detail-oriented analyst working across data validation, quality checking, operational research,
+          and AI-assisted workflows. Comfortable analyzing and validating data, catching process errors,
+          and tightening workflow accuracy using prompt engineering and generative AI tools — partnering
+          with AI teams to test model outputs and deliver accurate results under strict deadlines.
+        </p>
+        <div class="contact-row">
+          <span><span class="k">loc</span> Udumalpet, Tamil Nadu</span>
+          <a href="mailto:sowbarnikaue10@gmail.com"><span class="k">mail</span> sowbarnikaue10@gmail.com</a>
+          <a href="tel:+918838453874"><span class="k">tel</span> +91 8838453874</a>
+          <a href="https://linkedin.com/in/sowbarnika-ue-35428b250" target="_blank" rel="noopener"><span class="k">in</span> /sowbarnika-ue-35428b250</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- SKILLS -->
+    <section id="skills">
+      <div class="prompt"><span class="user">sowbarnika</span><span class="host">@eclerx</span><span class="cmd">:~$ cat skills.json</span><span class="cursor-blink"></span></div>
+      <h2 class="sec-title">SKILL <span class="accent">STACK</span></h2>
+      <div class="sec-sub">technical / tools / soft — as declared in profile</div>
+      <div class="skill-grid">
+        <div class="skill-panel green">
+          <div class="head"><span>technical</span><span>03</span></div>
+          <div class="pill-row">
+            <span class="pill">Python</span>
+            <span class="pill">SQL</span>
+            <span class="pill">Power BI</span>
+            <span class="pill">HTML</span>
+          </div>
+        </div>
+        <div class="skill-panel cyan">
+          <div class="head"><span>professional tools</span><span>03</span></div>
+          <div class="pill-row">
+            <span class="pill">LexisNexis</span>
+            <span class="pill">DocIntel</span>
+            <span class="pill">Excel</span>
+            <span class="pill">Word</span>
+          </div>
+        </div>
+        <div class="skill-panel amber">
+          <div class="head"><span>soft skills</span><span>04</span></div>
+          <div class="pill-row">
+            <span class="pill">Adaptability</span>
+            <span class="pill">Communication</span>
+            <span class="pill">Problem Solving</span>
+            <span class="pill">Time Management</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXPERIENCE -->
+    <section id="experience">
+      <div class="prompt"><span class="user">sowbarnika</span><span class="host">@eclerx</span><span class="cmd">:~$ tail -f experience.log</span><span class="cursor-blink"></span></div>
+      <h2 class="sec-title">WORK <span class="accent">EXPERIENCE</span></h2>
+      <div class="sec-sub">role history</div>
+      <div class="job-card">
+        <div class="job-head">
+          <div class="job-title">Analyst <span class="co">— eClerx Services Ltd</span></div>
+          <div class="job-meta">Tidel Park, Coimbatore &nbsp;·&nbsp; <span class="date">10/2025 – PRESENT</span></div>
+        </div>
+
+        <div class="log-group">
+          <span class="log-tag maker">maker</span>
+          <ul class="log-list">
+            <li>Conducted secondary research using LexisNexis, Google, and AI-assisted tools.</li>
+            <li>Processed and managed research files through DocIntel; analyzed and documented findings per client requirements.</li>
+            <li>Extracted logistics and operational information with accuracy.</li>
+          </ul>
+        </div>
+
+        <div class="log-group">
+          <span class="log-tag qc">quality checker</span>
+          <ul class="log-list">
+            <li>Reviewed and validated research files to maintain high-quality deliverables and process accuracy.</li>
+            <li>Identified and corrected errors; tracked makers using Microsoft Excel for issue resolution.</li>
+            <li>Trained and guided junior team members on research processes, tools, and quality standards.</li>
+          </ul>
+        </div>
+
+        <div class="log-group">
+          <span class="log-tag ai">ai workflow</span>
+          <ul class="log-list">
+            <li>Utilized structured AI prompts to locate official corporate URLs and verify employment statuses across active case profiles.</li>
+            <li>Critiqued AI-generated search responses for factual accuracy and relevance to filter out misinformation.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- EDUCATION + PROJECT -->
+    <section id="education">
+      <div class="prompt"><span class="user">sowbarnika</span><span class="host">@eclerx</span><span class="cmd">:~$ select * from education, project;</span><span class="cursor-blink"></span></div>
+      <h2 class="sec-title">EDUCATION <span class="accent">&amp; PROJECT</span></h2>
+      <div class="sec-sub">academic record</div>
+      <div class="split">
+        <div class="card" id="education-card">
+          <div class="card-title">B.Sc Computer Science</div>
+          <div class="card-sub">Sri Krishna Adithya College of Arts and Science, Coimbatore</div>
+          <div class="kv"><span class="k">DURATION</span><span class="v">2022 – 2025</span></div>
+          <div class="kv"><span class="k">CGPA</span><span class="v">8.1</span></div>
+        </div>
+        <div class="card" id="project">
+          <div class="card-title">Car Price Prediction</div>
+          <div class="card-sub">Academic Project</div>
+          <div class="tech-tags">
+            <span>Python</span><span>Flask</span><span>Linear Regression</span><span>NumPy</span><span>Pandas</span>
+          </div>
+          <ul class="log-list">
+            <li>Developed and optimized ML algorithms to predict used vehicle market valuations using historical pricing and feature data.</li>
+            <li>Built feature engineering pipelines and optimized model latency by pruning complex tree architectures for faster real-time queries.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- CERTS + LANGUAGES -->
+    <section id="certs">
+      <div class="prompt"><span class="user">sowbarnika</span><span class="host">@eclerx</span><span class="cmd">:~$ cat certs.log languages.conf</span><span class="cursor-blink"></span></div>
+      <h2 class="sec-title">CERTS <span class="accent">&amp; LANGUAGES</span></h2>
+      <div class="sec-sub">publications, talks, language pack</div>
+      <div class="row-2">
+        <div class="card">
+          <div class="card-title" style="font-size:20px;">Certificates</div>
+          <div class="cert-item">
+            <div class="mark">§</div>
+            <div>
+              <div class="t">Published — International Journal of Research</div>
+              <div class="d">2025</div>
+            </div>
+          </div>
+          <div class="cert-item">
+            <div class="mark">§</div>
+            <div>
+              <div class="t">Presented — International Conference on Intelligent Computing and Technology</div>
+              <div class="d">2025</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size:20px;">Languages</div>
+          <div class="lang-list">
+            <div class="lang-row"><span>English</span><span class="bar" style="--w:95%"></span></div>
+            <div class="lang-row"><span>Tamil</span><span class="bar" style="--w:100%"></span></div>
+            <div class="lang-row"><span>Telugu</span><span class="bar" style="--w:80%"></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <footer id="contact">
+      <div class="prompt" style="justify-content:center;"><span class="user">sowbarnika</span><span class="host">@eclerx</span><span class="cmd">:~$ ./contact.sh</span><span class="cursor-blink"></span></div>
+      <div class="term-window">
+        <div class="bar"><span class="dot a"></span><span class="dot c"></span><span class="dot g"></span></div>
+        <div class="body">
+          <div class="l"><span class="k">$</span> echo $EMAIL &nbsp;→&nbsp; <a href="mailto:sowbarnikaue10@gmail.com">sowbarnikaue10@gmail.com</a></div>
+          <div class="l"><span class="k">$</span> echo $PHONE &nbsp;→&nbsp; +91 8838453874</div>
+          <div class="l"><span class="k">$</span> echo $LINKEDIN &nbsp;→&nbsp; <a href="https://linkedin.com/in/sowbarnika-ue-35428b250" target="_blank" rel="noopener">linkedin.com/in/sowbarnika-ue-35428b250</a></div>
+          <div class="l"><span class="k">$</span> echo $LOCATION &nbsp;→&nbsp; Udumalpet, Tamil Nadu, India</div>
+          <div class="l" style="margin-top:12px; color:var(--green-dim);">process exited with code 0 — thanks for reading.</div>
+        </div>
+      </div>
+      <div class="foot-note">// end of file — sowbarnika_ue portfolio, compiled 2026</div>
+    </footer>
+
+    <div class="statusbar">
+      <span><b>UPTIME</b> <span id="uptime">—</span></span>
+      <span><b>ROLE</b> Analyst · eClerx</span>
+      <span><b>BUILD</b> v1.0.2026</span>
+    </div>
+  </main>
+</div>
+
+<script>
+  // active nav highlighting on scroll
+  const navItems = document.querySelectorAll('[data-nav]');
+  const mobileLinks = document.querySelectorAll('.mobile-nav a');
+  const sections = document.querySelectorAll('section, footer#contact');
+  const pathbar = document.getElementById('pathbar');
+
+  const fileNames = {
+    profile: 'profile.sh',
+    skills: 'skills.json',
+    experience: 'experience.log',
+    education: 'education.db',
+    project: 'project/',
+    certs: 'certs.log',
+    contact: 'contact.sh'
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        const id = entry.target.getAttribute('id');
+        navItems.forEach(n => n.classList.toggle('active', n.getAttribute('href') === '#' + id));
+        mobileLinks.forEach(n => n.classList.toggle('active', n.getAttribute('href') === '#' + id));
+        if(fileNames[id]){
+          pathbar.innerHTML = '~ <span class="sep">/</span> <span class="cur">' + fileNames[id] + '</span>';
+        }
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px', threshold: 0 });
+
+  sections.forEach(s => observer.observe(s));
+
+  // uptime ticker since 10/2025 (employment start)
+  const start = new Date(2025, 9, 1); // Oct 1 2025
+  const uptimeEl = document.getElementById('uptime');
+  function renderUptime(){
+    const now = new Date();
+    let diffMs = now - start;
+    if(diffMs < 0) diffMs = 0;
+    const days = Math.floor(diffMs / 86400000);
+    const months = Math.floor(days / 30.44);
+    const remDays = Math.floor(days - months * 30.44);
+    uptimeEl.textContent = months + 'mo ' + remDays + 'd';
+  }
+  renderUptime();
+  setInterval(renderUptime, 60000);
+</script>
+
+</body>
+</html>
